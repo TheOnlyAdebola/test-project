@@ -1,4 +1,4 @@
-name: Monitor Google
+name: Multi-Site Monitor
 on:
   schedule:
     - cron: '0 */6 * * *'
@@ -12,18 +12,71 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check Google + update site
+      - name: Check sites + update page
         run: |
           TIME=$(date -u +"%Y-%m-%d %H:%M UTC")
-          if curl -s --head --fail https://www.google.com > /dev/null; then
+          FAIL=0
+          
+          # Check Google
+          if curl -s --head --fail --max-time 10 https://www.google.com > /dev/null; then
+            GOOGLE="✅ Google"
+          else
+            GOOGLE="❌ Google"
+            FAIL=1
+          fi
+          
+          # Check GitHub
+          if curl -s --head --fail --max-time 10 https://github.com > /dev/null; then
+            GITHUB="✅ GitHub"
+          else
+            GITHUB="❌ GitHub"
+            FAIL=1
+          fi
+          
+          # Check Cloudflare
+          if curl -s --head --fail --max-time 10 https://www.cloudflare.com > /dev/null; then
+            CLOUDFLARE="✅ Cloudflare"
+          else
+            CLOUDFLARE="❌ Cloudflare"
+            FAIL=1
+          fi
+          
+          # Set main status
+          if [ $FAIL -eq 0 ]; then
             STATUS="✅ All Systems Operational"
             COLOR="green"
           else
             STATUS="❌ Outage Detected"
             COLOR="red"
           fi
-          sed -i "s|<h2.*</h2>|<h2 style=\"color:$COLOR;\">$STATUS</h2>|" index.html
-          sed -i "s|<p>Last checked:.*</p>|<p>Last checked: $TIME</p>|" index.html
+          
+          # Update index.html
+          cat > index.html << HTML
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>Dev Status</title>
+            <style>
+              body { font-family: system-ui; text-align: center; padding-top: 15%; }
+              h2 { color: $COLOR; font-size: 3rem; }
+             .checks { font-size: 1.5rem; line-height: 2; }
+             .time { color: #666; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <h1>My Dev Status</h1>
+            <h2>$STATUS</h2>
+            <div class="checks">
+              $GOOGLE<br>
+              $GITHUB<br>
+              $CLOUDFLARE
+            </div>
+            <p class="time">Last checked: $TIME</p>
+            <p>Built with Git + GitHub + Actions</p>
+          </body>
+          </html>
+          HTML
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
