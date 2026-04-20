@@ -1,25 +1,33 @@
-name: Update Status Time
+name: Monitor Google
 on:
   schedule:
-    - cron: '0 */6 * * *' # Runs every 6 hours
-  workflow_dispatch: # Lets you run it manually
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 permissions:
-  contents: write # This line fixes exit code 128
+  contents: write
 
 jobs:
-  update:
+  monitor:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Update timestamp
+      - name: Check Google + update site
         run: |
           TIME=$(date -u +"%Y-%m-%d %H:%M UTC")
-          sed -i "s|Last checked:.*|Last checked: $TIME</p>|" index.html
+          if curl -s --head --fail https://www.google.com > /dev/null; then
+            STATUS="✅ All Systems Operational"
+            COLOR="green"
+          else
+            STATUS="❌ Outage Detected"
+            COLOR="red"
+          fi
+          sed -i "s|<h2.*</h2>|<h2 style=\"color:$COLOR;\">$STATUS</h2>|" index.html
+          sed -i "s|<p>Last checked:.*</p>|<p>Last checked: $TIME</p>|" index.html
       - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git commit -m "Bot: Update status time" || exit 0
+          git diff --staged --quiet || git commit -m "Bot: Status check at $TIME"
           git push
